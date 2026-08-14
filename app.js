@@ -122,14 +122,18 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   if (!overlay) stopAll();
   const url = URL.createObjectURL(sound.blob);
   const audio = new Audio(url);
-  playing.set(padKey, { audio, soundId: sound.id, name: displayName });
+  audio.preload='auto';
+  playing.set(padKey, { audio, soundId: sound.id, name: displayName, url });
   refreshPlayingUI();
-  audio.play().catch(() => stopPad(padKey));
+  audio.play().catch(error => {
+    console.error('Audio playback failed',error);
+    stopPad(padKey);
+    ui.now.textContent='再生できませんでした';
+  });
   audio.addEventListener('timeupdate', () => updateProgress(padKey));
   audio.addEventListener('loadedmetadata', () => updateProgress(padKey));
   audio.addEventListener('ended', () => stopPad(padKey), { once:true });
   audio.addEventListener('error', () => stopPad(padKey), { once:true });
-  audio.addEventListener('loadeddata', () => URL.revokeObjectURL(url), { once:true });
 }
 
 function stopAll() {
@@ -140,6 +144,7 @@ function stopPad(padKey) {
   const entry = playing.get(padKey);
   if (!entry) return;
   entry.audio.pause(); entry.audio.currentTime = 0;
+  URL.revokeObjectURL(entry.url);
   playing.delete(padKey);
   refreshPlayingUI();
 }

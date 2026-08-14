@@ -1,5 +1,5 @@
-const CACHE = 'radio-pad-v24';
-const ASSETS = ['./','./index.html','./styles.css?v=24','./app.js?v=24','./manifest.webmanifest','./icons/icon.svg'];
+const CACHE = 'radio-pad-v25';
+const ASSETS = ['./','./index.html','./styles.css?v=25','./app.js?v=25','./manifest.webmanifest','./icons/icon.svg'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
