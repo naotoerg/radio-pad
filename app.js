@@ -120,9 +120,17 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
     return;
   }
   if (!overlay) stopAll();
-  const url = URL.createObjectURL(sound.blob);
-  const audio = new Audio(url);
+  const playableBlob=normalizeAudioBlob(sound.blob,sound.name);
+  const url = URL.createObjectURL(playableBlob);
+  const audio = document.createElement('audio');
+  audio.className='audio-engine';
+  audio.src=url;
   audio.preload='auto';
+  audio.playsInline=true;
+  audio.muted=false;
+  audio.volume=1;
+  document.body.append(audio);
+  audio.load();
   playing.set(padKey, { audio, soundId: sound.id, name: displayName, url });
   refreshPlayingUI();
   audio.play().catch(error => {
@@ -136,6 +144,13 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   audio.addEventListener('error', () => stopPad(padKey), { once:true });
 }
 
+function normalizeAudioBlob(blob,name) {
+  const extension=name.split('.').pop()?.toLowerCase();
+  const mimeTypes={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',mp4:'audio/mp4',aac:'audio/aac',aif:'audio/aiff',aiff:'audio/aiff',caf:'audio/x-caf',ogg:'audio/ogg',oga:'audio/ogg',opus:'audio/ogg',flac:'audio/flac'};
+  const type=mimeTypes[extension] || (blob.type.startsWith('audio/') ? blob.type : 'audio/mpeg');
+  return blob.type === type ? blob : new Blob([blob],{type});
+}
+
 function stopAll() {
   [...playing.keys()].forEach(stopPad);
 }
@@ -144,6 +159,9 @@ function stopPad(padKey) {
   const entry = playing.get(padKey);
   if (!entry) return;
   entry.audio.pause(); entry.audio.currentTime = 0;
+  entry.audio.removeAttribute('src');
+  entry.audio.load();
+  entry.audio.remove();
   URL.revokeObjectURL(entry.url);
   playing.delete(padKey);
   refreshPlayingUI();
@@ -189,7 +207,8 @@ function refreshPlayingUI() {
 async function addFiles(files, group = '') {
   for (const file of files) {
     if (!isAudioFile(file)) continue;
-    const sound = { id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, ''), group, overlay: false, blob: file, createdAt: Date.now() };
+    const displayName=file.name.replace(/\.[^.]+$/, '');
+    const sound = { id: crypto.randomUUID(), name: displayName, originalName:file.name, group, overlay: false, blob: normalizeAudioBlob(file,file.name), createdAt: Date.now() };
     await saveSound(sound); sounds.push(sound);
   }
   ui.input.value = ''; ui.folderInput.value = ''; ui.addDialog.close(); render();
