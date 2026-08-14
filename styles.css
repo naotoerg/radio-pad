@@ -20,6 +20,7 @@ main { width:min(1100px,100%); margin:auto; padding:24px max(20px,env(safe-area-
 .view-tab { min-height:38px; padding:0 16px; border:0; border-radius:9px; color:#858b96; background:transparent; font-size:13px; font-weight:800; }
 .view-tab.active { color:#171306; background:#ffcf44; }
 .unread-badge { display:inline-grid; min-width:19px; height:19px; margin-left:5px; padding:0 5px; place-items:center; border-radius:99px; color:#fff; background:#e44f59; font-size:10px; }
+.unread-badge[hidden] { display:none; }
 .app-view[hidden] { display:none; }
 .header-actions .add-button[hidden] { display:none; }
 .now-playing { display:flex; gap:10px; align-items:center; min-height:38px; padding:0 2px; margin-bottom:28px; }
