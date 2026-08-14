@@ -6,6 +6,7 @@ let sounds = [];
 let letters = [];
 let lettersLoading = false;
 const playing = new Map();
+const audioEngines = new Map();
 let pendingRandomFiles = [];
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
@@ -36,6 +37,7 @@ async function removeSound(id) { const db = await openDb(); return txDone(db.tra
 function txDone(tx, action) { return new Promise((resolve,reject) => { action(tx); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); }); }
 
 function render() {
+  syncAudioEngines();
   ui.grid.replaceChildren();
   const cards = [];
   const waveformJobs = [];
@@ -71,7 +73,6 @@ function render() {
     card.querySelector('.edit-button').addEventListener('click', () => editGroup(name, items));
     card.querySelector('.play-pad').addEventListener('click', () => {
       const item = items[Math.floor(Math.random() * items.length)];
-      ensureWaveform(item,card);
       playSound(item, padKey, `${name}（${item.name}）`, items.some(entry => entry.overlay));
     });
     waveformJobs.push({ sound:items[0], card });
@@ -118,34 +119,52 @@ function drawWaveform(card,peaks) {
   card.querySelector('.waveform').innerHTML=`<span class="waveform-layer waveform-base">${svg}</span><span class="waveform-layer waveform-played">${svg}</span>`;
 }
 
+function ensureAudioEngine(sound) {
+  const existing=audioEngines.get(sound.id);
+  if (existing) return existing;
+  const playableBlob=normalizeAudioBlob(sound.blob,sound.originalName || sound.name);
+  const url=URL.createObjectURL(playableBlob);
+  const audio=document.createElement('audio');
+  audio.className='audio-engine'; audio.src=url; audio.preload='none'; audio.playsInline=true; audio.muted=false; audio.volume=1;
+  document.body.append(audio);
+  const engine={audio,url}; audioEngines.set(sound.id,engine); return engine;
+}
+
+function disposeAudioEngine(soundId) {
+  const engine=audioEngines.get(soundId); if (!engine) return;
+  engine.audio.pause(); engine.audio.removeAttribute('src'); engine.audio.load(); engine.audio.remove(); URL.revokeObjectURL(engine.url); audioEngines.delete(soundId);
+}
+
+function syncAudioEngines() {
+  const ids=new Set(sounds.map(sound => sound.id));
+  [...audioEngines.keys()].filter(id => !ids.has(id)).forEach(disposeAudioEngine);
+  sounds.forEach(ensureAudioEngine);
+}
+
 function playSound(sound, padKey = sound.id, displayName = sound.name, overlay = Boolean(sound.overlay)) {
   if (playing.has(padKey)) {
     stopPad(padKey);
     return;
   }
   if (!overlay) stopAll();
-  const playableBlob=normalizeAudioBlob(sound.blob,sound.name);
-  const url = URL.createObjectURL(playableBlob);
-  const audio = document.createElement('audio');
-  audio.className='audio-engine';
-  audio.src=url;
-  audio.preload='auto';
-  audio.playsInline=true;
-  audio.muted=false;
-  audio.volume=1;
-  document.body.append(audio);
-  audio.load();
-  playing.set(padKey, { audio, soundId: sound.id, name: displayName, url });
+  const engine=ensureAudioEngine(sound);
+  const audio=engine.audio;
+  audio.pause();
+  try { audio.currentTime=0; } catch {}
+  const ended=() => stopPad(padKey);
+  const failed=() => stopPad(padKey);
+  const progress=() => updateProgress(padKey);
+  playing.set(padKey, { audio, soundId: sound.id, name: displayName, ended, failed, progress });
   refreshPlayingUI();
   audio.play().catch(error => {
     console.error('Audio playback failed',error);
     stopPad(padKey);
     ui.now.textContent='再生できませんでした';
   });
-  audio.addEventListener('timeupdate', () => updateProgress(padKey));
-  audio.addEventListener('loadedmetadata', () => updateProgress(padKey));
-  audio.addEventListener('ended', () => stopPad(padKey), { once:true });
-  audio.addEventListener('error', () => stopPad(padKey), { once:true });
+  audio.addEventListener('timeupdate', progress);
+  audio.addEventListener('loadedmetadata', progress);
+  audio.addEventListener('ended', ended, { once:true });
+  audio.addEventListener('error', failed, { once:true });
 }
 
 function normalizeAudioBlob(blob,name) {
@@ -163,10 +182,10 @@ function stopPad(padKey) {
   const entry = playing.get(padKey);
   if (!entry) return;
   entry.audio.pause(); entry.audio.currentTime = 0;
-  entry.audio.removeAttribute('src');
-  entry.audio.load();
-  entry.audio.remove();
-  URL.revokeObjectURL(entry.url);
+  entry.audio.removeEventListener('ended',entry.ended);
+  entry.audio.removeEventListener('error',entry.failed);
+  entry.audio.removeEventListener('timeupdate',entry.progress);
+  entry.audio.removeEventListener('loadedmetadata',entry.progress);
   playing.delete(padKey);
   refreshPlayingUI();
 }
@@ -263,10 +282,10 @@ $('#deleteSound').addEventListener('click', async () => {
   const id=$('#editId').value;
   if (id.startsWith('group:')) {
     const group=id.slice(6); stopPad(id); const items=sounds.filter(sound => sound.group === group);
-    for (const item of items) await removeSound(item.id);
+    for (const item of items) { disposeAudioEngine(item.id); await removeSound(item.id); }
     sounds=sounds.filter(sound => sound.group !== group);
   } else {
-    stopPad(id); await removeSound(id); sounds=sounds.filter(sound => sound.id !== id);
+    stopPad(id); disposeAudioEngine(id); await removeSound(id); sounds=sounds.filter(sound => sound.id !== id);
   }
   ui.dialog.close(); render(); refreshPlayingUI();
 });
