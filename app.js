@@ -2,6 +2,7 @@ const DB_NAME = 'radio-pad-db';
 const STORE = 'sounds';
 const LETTER_CONFIG_KEY = 'radio-pad-letter-config';
 const READ_LETTERS_KEY = 'radio-pad-read-letters';
+const LETTER_SCALE_KEY = 'radio-pad-letter-scale';
 let sounds = [];
 let letters = [];
 let lettersLoading = false;
@@ -395,7 +396,16 @@ function switchView(name) {
   $('#samplerView').hidden=name !== 'sampler';
   $('#lettersView').hidden=name !== 'letters';
   $('#openAddDialog').hidden=name !== 'sampler';
+  $('#openLetterDisplaySettings').hidden=name !== 'letters';
   if (name === 'letters' && !letters.length && getLetterConfig().endpoint) loadLetters();
+}
+
+function setLetterScale(value,save=true) {
+  const scale=Math.min(2,Math.max(.75,Number(value) || 1));
+  $('#lettersView').style.setProperty('--letters-scale',String(scale));
+  $('#letterScaleInput').value=String(scale);
+  $('#letterScaleOutput').textContent=`${Math.round(scale*100)}%`;
+  if (save) localStorage.setItem(LETTER_SCALE_KEY,String(scale));
 }
 
 function formatLetterTime(value) {
@@ -483,6 +493,10 @@ async function loadLetters() {
 }
 
 document.querySelectorAll('.view-tab').forEach(button => button.addEventListener('click',() => switchView(button.dataset.view)));
+setLetterScale(localStorage.getItem(LETTER_SCALE_KEY) || 1,false);
+$('#openLetterDisplaySettings').addEventListener('click',() => $('#letterDisplayDialog').showModal());
+$('#letterScaleInput').addEventListener('input',event => setLetterScale(event.target.value));
+$('#resetLetterScale').addEventListener('click',() => setLetterScale(1));
 $('#refreshLetters').addEventListener('click',loadLetters);
 $('#openLetterConfig').addEventListener('click',() => {
   const config=getLetterConfig(); $('#letterEndpoint').value=config.endpoint || ''; $('#letterToken').value=config.token || ''; $('#letterConfigDialog').showModal();
