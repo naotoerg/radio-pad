@@ -10,13 +10,15 @@
   <title>Radio Pad</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=35">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <time id="currentClock" class="current-clock">--:--:--</time>
-    </div>
+    <nav class="view-tabs" aria-label="画面切り替え">
+      <button class="view-tab active" type="button" data-view="sampler" aria-selected="true">サンプラー</button>
+      <button class="view-tab" type="button" data-view="letters" aria-selected="false">お便り <span id="unreadBadge" class="unread-badge" hidden></span></button>
+    </nav>
+    <time id="currentClock" class="current-clock">--:--:--</time>
     <div class="header-actions">
       <button id="openAddDialog" class="add-button" type="button" aria-label="音を追加" title="音を追加">＋</button>
       <button id="stopAll" class="stop-button" type="button" disabled>■ すべて停止</button>
@@ -24,17 +26,47 @@
   </header>
 
   <main>
-    <section class="now-playing" aria-live="polite">
-      <span id="statusDot" class="status-dot"></span>
-      <div>
-        <small>NOW PLAYING</small>
-        <strong id="nowPlaying">待機中</strong>
-      </div>
+    <section id="samplerView" class="app-view">
+      <section class="now-playing" aria-live="polite">
+        <span id="statusDot" class="status-dot"></span>
+        <div>
+          <small>NOW PLAYING</small>
+          <strong id="nowPlaying">待機中</strong>
+        </div>
+      </section>
+
+      <div id="soundGrid" class="sound-grid" aria-label="登録した音源"></div>
     </section>
 
-    <div id="soundGrid" class="sound-grid" aria-label="登録した音源"></div>
-
+    <section id="lettersView" class="app-view letters-view" hidden>
+      <div class="letters-toolbar">
+        <div><h2>リスナーからのお便り</h2><p id="lettersSummary">Googleフォームと接続してください</p></div>
+        <div class="letters-actions">
+          <button id="refreshLetters" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"></path></svg>更新</button>
+          <button id="openLetterConfig" type="button" aria-label="お便りの接続設定">接続設定</button>
+        </div>
+      </div>
+      <div id="lettersStatus" class="letters-status">
+        <strong>回答シートはまだ接続されていません</strong>
+        <span>「接続設定」にApps ScriptのURLとアクセスキーを入力すると、ここでお便りを確認できます。</span>
+      </div>
+      <div id="lettersList" class="letters-list" aria-live="polite"></div>
+    </section>
   </main>
+
+  <dialog id="letterConfigDialog">
+    <form id="letterConfigForm">
+      <div><p class="eyebrow">LETTERS</p><h2>Googleフォームと接続</h2></div>
+      <label>Apps ScriptのURL<input id="letterEndpoint" type="url" required inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+      <label>アクセスキー<input id="letterToken" type="password" required autocomplete="off"></label>
+      <p class="hint">URLとキーはこの端末内だけに保存され、GitHubには送信されません。</p>
+      <div class="dialog-actions simple-actions">
+        <span></span>
+        <button type="button" data-close-letter-config>キャンセル</button>
+        <button class="primary" value="default">保存して接続</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="addDialog">
     <div class="add-dialog-content">
@@ -110,6 +142,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=32"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>

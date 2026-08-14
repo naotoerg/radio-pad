@@ -1,6 +1,10 @@
 const DB_NAME = 'radio-pad-db';
 const STORE = 'sounds';
+const LETTER_CONFIG_KEY = 'radio-pad-letter-config';
+const READ_LETTERS_KEY = 'radio-pad-read-letters';
 let sounds = [];
+let letters = [];
+let lettersLoading = false;
 const playing = new Map();
 let pendingRandomFiles = [];
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
@@ -288,3 +292,116 @@ function runScheduled(key,day,time,action) {
 
 updateClockAndSchedules();
 setInterval(updateClockAndSchedules,500);
+
+function getLetterConfig() {
+  try { return JSON.parse(localStorage.getItem(LETTER_CONFIG_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function getReadLetterIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(READ_LETTERS_KEY)) || []); }
+  catch { return new Set(); }
+}
+
+function switchView(name) {
+  document.querySelectorAll('.view-tab').forEach(button => {
+    const active=button.dataset.view === name;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',String(active));
+  });
+  $('#samplerView').hidden=name !== 'sampler';
+  $('#lettersView').hidden=name !== 'letters';
+  $('#openAddDialog').hidden=name !== 'sampler';
+  if (name === 'letters' && !letters.length && getLetterConfig().endpoint) loadLetters();
+}
+
+function formatLetterTime(value) {
+  const date=new Date(value);
+  if (Number.isNaN(date.getTime())) return value || '';
+  return new Intl.DateTimeFormat('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(date);
+}
+
+function updateUnreadBadge() {
+  const read=getReadLetterIds();
+  const unread=letters.filter(letter => !read.has(String(letter.id))).length;
+  const badge=$('#unreadBadge');
+  badge.hidden=unread === 0;
+  badge.textContent=unread > 99 ? '99+' : String(unread);
+  $('#lettersSummary').textContent=letters.length ? `${letters.length}件・未読 ${unread}件` : 'お便りはまだありません';
+}
+
+function renderLetters() {
+  const list=$('#lettersList');
+  const read=getReadLetterIds();
+  list.replaceChildren();
+  letters.forEach(letter => {
+    const id=String(letter.id);
+    const card=document.createElement('article');
+    card.className=`letter-card${read.has(id) ? '' : ' unread'}`;
+    const meta=document.createElement('div'); meta.className='letter-meta';
+    const author=document.createElement('strong'); author.className='letter-author'; author.textContent=letter.name || '匿名';
+    const time=document.createElement('time'); time.className='letter-time'; time.textContent=formatLetterTime(letter.timestamp);
+    const message=document.createElement('p'); message.className='letter-message'; message.textContent=letter.message || '';
+    const footer=document.createElement('div'); footer.className='letter-footer';
+    const toggle=document.createElement('button'); toggle.className='read-toggle'; toggle.type='button'; toggle.textContent=read.has(id) ? '未読に戻す' : '既読にする';
+    toggle.addEventListener('click',() => toggleLetterRead(id));
+    meta.append(author,time); footer.append(toggle); card.append(meta,message,footer); list.append(card);
+  });
+  updateUnreadBadge();
+}
+
+function toggleLetterRead(id) {
+  const read=getReadLetterIds();
+  read.has(id) ? read.delete(id) : read.add(id);
+  localStorage.setItem(READ_LETTERS_KEY,JSON.stringify([...read]));
+  renderLetters();
+}
+
+async function loadLetters() {
+  if (lettersLoading) return;
+  const config=getLetterConfig();
+  const status=$('#lettersStatus');
+  if (!config.endpoint || !config.token) { status.hidden=false; status.classList.remove('error'); return; }
+  lettersLoading=true;
+  status.hidden=false; status.classList.remove('error'); status.replaceChildren();
+  const loading=document.createElement('strong'); loading.textContent='お便りを読み込んでいます…'; status.append(loading);
+  $('#refreshLetters').disabled=true;
+  try {
+    const separator=config.endpoint.includes('?') ? '&' : '?';
+    const response=await fetch(`${config.endpoint}${separator}token=${encodeURIComponent(config.token)}`,{cache:'no-store'});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data=await response.json();
+    if (!data.ok) throw new Error(data.error || 'アクセスできませんでした');
+    letters=(data.letters || []).sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
+    renderLetters(); status.hidden=letters.length > 0;
+    if (!letters.length) { status.replaceChildren(); const empty=document.createElement('strong'); empty.textContent='お便りはまだありません'; status.append(empty); }
+  } catch (error) {
+    status.hidden=false; status.classList.add('error'); status.replaceChildren();
+    const title=document.createElement('strong'); title.textContent='お便りを読み込めませんでした';
+    const detail=document.createElement('span'); detail.textContent='接続設定のURLとアクセスキーを確認してください。';
+    status.append(title,detail); console.error('Letter fetch failed',error);
+  } finally { lettersLoading=false; $('#refreshLetters').disabled=false; }
+}
+
+document.querySelectorAll('.view-tab').forEach(button => button.addEventListener('click',() => switchView(button.dataset.view)));
+$('#refreshLetters').addEventListener('click',loadLetters);
+$('#openLetterConfig').addEventListener('click',() => {
+  const config=getLetterConfig(); $('#letterEndpoint').value=config.endpoint || ''; $('#letterToken').value=config.token || ''; $('#letterConfigDialog').showModal();
+});
+$('[data-close-letter-config]').addEventListener('click',() => $('#letterConfigDialog').close());
+$('#letterConfigForm').addEventListener('submit',event => {
+  event.preventDefault();
+  const endpoint=$('#letterEndpoint').value.trim(); const token=$('#letterToken').value.trim();
+  localStorage.setItem(LETTER_CONFIG_KEY,JSON.stringify({endpoint,token}));
+  $('#letterConfigDialog').close(); loadLetters();
+});
+
+if (getLetterConfig().endpoint && getLetterConfig().token) loadLetters();
+setInterval(() => {
+  const config=getLetterConfig();
+  if (config.endpoint && config.token && document.visibilityState === 'visible') loadLetters();
+},30000);
+document.addEventListener('visibilitychange',() => {
+  const config=getLetterConfig();
+  if (document.visibilityState === 'visible' && config.endpoint && config.token) loadLetters();
+});
