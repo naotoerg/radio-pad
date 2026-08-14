@@ -357,6 +357,20 @@ function toggleLetterRead(id) {
   renderLetters();
 }
 
+function fetchLettersJsonp(endpoint,token) {
+  return new Promise((resolve,reject) => {
+    const callback=`radioPadLetters${Date.now()}${Math.floor(Math.random()*10000)}`;
+    const script=document.createElement('script');
+    const separator=endpoint.includes('?') ? '&' : '?';
+    const cleanup=() => { clearTimeout(timer); script.remove(); delete window[callback]; };
+    const timer=setTimeout(() => { cleanup(); reject(new Error('接続がタイムアウトしました')); },15000);
+    window[callback]=data => { cleanup(); resolve(data); };
+    script.onerror=() => { cleanup(); reject(new Error('Apps Scriptへ接続できませんでした')); };
+    script.src=`${endpoint}${separator}token=${encodeURIComponent(token)}&callback=${encodeURIComponent(callback)}&_=${Date.now()}`;
+    document.head.append(script);
+  });
+}
+
 async function loadLetters() {
   if (lettersLoading) return;
   const config=getLetterConfig();
@@ -367,10 +381,7 @@ async function loadLetters() {
   const loading=document.createElement('strong'); loading.textContent='お便りを読み込んでいます…'; status.append(loading);
   $('#refreshLetters').disabled=true;
   try {
-    const separator=config.endpoint.includes('?') ? '&' : '?';
-    const response=await fetch(`${config.endpoint}${separator}token=${encodeURIComponent(config.token)}`,{cache:'no-store'});
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data=await response.json();
+    const data=await fetchLettersJsonp(config.endpoint,config.token);
     if (!data.ok) throw new Error(data.error || 'アクセスできませんでした');
     letters=(data.letters || []).sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
     renderLetters(); status.hidden=letters.length > 0;

@@ -3,23 +3,24 @@ const SHEET_ID = 1762324501;
 
 function doGet(e) {
   try {
+    const callback = e && e.parameter ? e.parameter.callback : '';
     const expected = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');
     const received = e && e.parameter ? e.parameter.token : '';
-    if (!expected || received !== expected) return jsonResponse({ ok: false, error: 'unauthorized' });
+    if (!expected || received !== expected) return jsonResponse({ ok: false, error: 'unauthorized' }, callback);
 
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheets().find(function(candidate) {
       return candidate.getSheetId() === SHEET_ID;
     });
-    if (!sheet) return jsonResponse({ ok: false, error: 'sheet_not_found' });
+    if (!sheet) return jsonResponse({ ok: false, error: 'sheet_not_found' }, callback);
 
     const values = sheet.getDataRange().getValues();
-    if (values.length < 2) return jsonResponse({ ok: true, letters: [] });
+    if (values.length < 2) return jsonResponse({ ok: true, letters: [] }, callback);
 
     const headers = values[0].map(function(value) { return String(value).trim(); });
     const timestampIndex = headers.indexOf('タイムスタンプ');
     const nameIndex = headers.indexOf('ラジオネーム');
     const messageIndex = headers.indexOf('DJへの質問など');
-    if (nameIndex < 0 || messageIndex < 0) return jsonResponse({ ok: false, error: 'columns_not_found' });
+    if (nameIndex < 0 || messageIndex < 0) return jsonResponse({ ok: false, error: 'columns_not_found' }, callback);
 
     const timeZone = Session.getScriptTimeZone() || 'Asia/Tokyo';
     const letters = values.slice(1).map(function(row, index) {
@@ -35,9 +36,9 @@ function doGet(e) {
       };
     }).filter(function(letter) { return letter.name || letter.message; });
 
-    return jsonResponse({ ok: true, letters: letters });
+    return jsonResponse({ ok: true, letters: letters }, callback);
   } catch (error) {
-    return jsonResponse({ ok: false, error: String(error && error.message ? error.message : error) });
+    return jsonResponse({ ok: false, error: String(error && error.message ? error.message : error) }, e && e.parameter ? e.parameter.callback : '');
   }
 }
 
@@ -52,6 +53,10 @@ function setupAccessToken() {
   return token;
 }
 
-function jsonResponse(value) {
-  return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
+function jsonResponse(value, callback) {
+  const json = JSON.stringify(value);
+  if (callback && /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback)) {
+    return ContentService.createTextOutput(callback + '(' + json + ');').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }
