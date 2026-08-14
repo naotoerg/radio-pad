@@ -1,0 +1,11 @@
+{
+  "name": "Radio Pad - ラジオ用サンプラー",
+  "short_name": "Radio Pad",
+  "description": "イントロ、ジングル、効果音をすばやく再生するラジオ用サンプラー",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0d11",
+  "theme_color": "#111318",
+  "orientation": "any",
+  "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
