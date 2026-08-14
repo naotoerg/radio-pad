@@ -7,6 +7,7 @@ let letters = [];
 let lettersLoading = false;
 const playing = new Map();
 const audioEngines = new Map();
+const scheduledAttempts = new Map();
 let pendingRandomFiles = [];
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
@@ -144,7 +145,7 @@ function syncAudioEngines() {
 function playSound(sound, padKey = sound.id, displayName = sound.name, overlay = Boolean(sound.overlay)) {
   if (playing.has(padKey)) {
     stopPad(padKey);
-    return;
+    return Promise.resolve(false);
   }
   if (!overlay) stopAll();
   const engine=ensureAudioEngine(sound);
@@ -156,15 +157,17 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   const progress=() => updateProgress(padKey);
   playing.set(padKey, { audio, soundId: sound.id, name: displayName, ended, failed, progress });
   refreshPlayingUI();
-  audio.play().catch(error => {
+  const started=audio.play().then(() => true).catch(error => {
     console.error('Audio playback failed',error);
     stopPad(padKey);
     ui.now.textContent='再生できませんでした';
+    return false;
   });
   audio.addEventListener('timeupdate', progress);
   audio.addEventListener('loadedmetadata', progress);
   audio.addEventListener('ended', ended, { once:true });
   audio.addEventListener('error', failed, { once:true });
+  return started;
 }
 
 function normalizeAudioBlob(blob,name) {
@@ -300,13 +303,21 @@ function updateClockAndSchedules() {
   const day=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const groups=new Map(); sounds.filter(sound => sound.group).forEach(sound => { if (!groups.has(sound.group)) groups.set(sound.group,[]); groups.get(sound.group).push(sound); });
   sounds.filter(sound => !sound.group && sound.scheduleEnabled && sound.scheduleTime === hhmm).forEach(sound => runScheduled(sound.id,day,hhmm,() => playSound(sound)));
-  groups.forEach((items,name) => { const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; runScheduled(`group:${name}`,day,hhmm,() => { const item=items[Math.floor(Math.random()*items.length)]; playSound(item,`group:${name}`,`${name}（${item.name}）`,items.some(entry => entry.overlay)); }); });
+  groups.forEach((items,name) => { const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; runScheduled(`group:${name}`,day,hhmm,() => { const item=items[Math.floor(Math.random()*items.length)]; return playSound(item,`group:${name}`,`${name}（${item.name}）`,items.some(entry => entry.overlay)); }); });
 }
 
 function runScheduled(key,day,time,action) {
   const storageKey=`radio-pad-schedule-${key}`; const marker=`${day} ${time}`;
   if (localStorage.getItem(storageKey) === marker) return;
-  localStorage.setItem(storageKey,marker); action();
+  const lastAttempt=scheduledAttempts.get(storageKey) || 0;
+  if (Date.now()-lastAttempt < 5000) return;
+  scheduledAttempts.set(storageKey,Date.now());
+  Promise.resolve(action()).then(started => {
+    if (started !== false) {
+      localStorage.setItem(storageKey,marker);
+      scheduledAttempts.delete(storageKey);
+    }
+  }).catch(error => console.error('Scheduled playback failed',error));
 }
 
 updateClockAndSchedules();
