@@ -8,6 +8,8 @@ let lettersLoading = false;
 const playing = new Map();
 const audioEngines = new Map();
 const scheduledAttempts = new Map();
+const timerBuffers = new Map();
+let timerAudioContext = null;
 let pendingRandomFiles = [];
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
@@ -132,6 +134,7 @@ function ensureAudioEngine(sound) {
 }
 
 function disposeAudioEngine(soundId) {
+  timerBuffers.delete(soundId);
   const engine=audioEngines.get(soundId); if (!engine) return;
   engine.audio.pause(); engine.audio.removeAttribute('src'); engine.audio.load(); engine.audio.remove(); URL.revokeObjectURL(engine.url); audioEngines.delete(soundId);
 }
@@ -140,6 +143,48 @@ function syncAudioEngines() {
   const ids=new Set(sounds.map(sound => sound.id));
   [...audioEngines.keys()].filter(id => !ids.has(id)).forEach(disposeAudioEngine);
   sounds.forEach(ensureAudioEngine);
+}
+
+async function unlockTimerAudio() {
+  const AudioContextClass=window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return false;
+  if (!timerAudioContext) timerAudioContext=new AudioContextClass();
+  try { if (timerAudioContext.state !== 'running') await timerAudioContext.resume(); }
+  catch { return false; }
+  const ready=timerAudioContext.state === 'running';
+  const button=$('#enableTimerAudio');
+  button.classList.toggle('ready',ready); button.textContent=ready ? 'タイマー準備完了' : '音声を準備';
+  return ready;
+}
+
+async function getTimerBuffer(sound) {
+  if (!timerBuffers.has(sound.id)) {
+    timerBuffers.set(sound.id,timerAudioContext.decodeAudioData(await sound.blob.arrayBuffer()).catch(error => { timerBuffers.delete(sound.id); throw error; }));
+  }
+  return timerBuffers.get(sound.id);
+}
+
+async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,overlay=Boolean(sound.overlay)) {
+  if (timerAudioContext && timerAudioContext.state !== 'running') {
+    try { await timerAudioContext.resume(); } catch {}
+  }
+  if (!timerAudioContext || timerAudioContext.state !== 'running') {
+    ui.now.textContent='タイマーの音声準備が必要です';
+    $('#enableTimerAudio').classList.remove('ready'); $('#enableTimerAudio').textContent='音声を準備';
+    return false;
+  }
+  let buffer;
+  try { buffer=await getTimerBuffer(sound); }
+  catch (error) { console.error('Scheduled audio decode failed',error); return false; }
+  if (playing.has(padKey)) stopPad(padKey);
+  if (!overlay) stopAll();
+  const source=timerAudioContext.createBufferSource(); source.buffer=buffer; source.connect(timerAudioContext.destination);
+  const startedAt=timerAudioContext.currentTime;
+  const audio={duration:buffer.duration};
+  Object.defineProperty(audio,'currentTime',{get:() => Math.min(buffer.duration,Math.max(0,timerAudioContext.currentTime-startedAt))});
+  const progressTimer=setInterval(() => updateProgress(padKey),100);
+  playing.set(padKey,{audio,source,progressTimer,soundId:sound.id,name:displayName});
+  source.onended=() => stopPad(padKey); source.start(); refreshPlayingUI(); return true;
 }
 
 function playSound(sound, padKey = sound.id, displayName = sound.name, overlay = Boolean(sound.overlay)) {
@@ -184,6 +229,12 @@ function stopAll() {
 function stopPad(padKey) {
   const entry = playing.get(padKey);
   if (!entry) return;
+  if (entry.source) {
+    entry.source.onended=null;
+    try { entry.source.stop(); } catch {}
+    clearInterval(entry.progressTimer);
+    playing.delete(padKey); refreshPlayingUI(); return;
+  }
   entry.audio.pause(); entry.audio.currentTime = 0;
   entry.audio.removeEventListener('ended',entry.ended);
   entry.audio.removeEventListener('error',entry.failed);
@@ -302,8 +353,8 @@ function updateClockAndSchedules() {
   const hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const day=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const groups=new Map(); sounds.filter(sound => sound.group).forEach(sound => { if (!groups.has(sound.group)) groups.set(sound.group,[]); groups.get(sound.group).push(sound); });
-  sounds.filter(sound => !sound.group && sound.scheduleEnabled && sound.scheduleTime === hhmm).forEach(sound => runScheduled(sound.id,day,hhmm,() => playSound(sound)));
-  groups.forEach((items,name) => { const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; runScheduled(`group:${name}`,day,hhmm,() => { const item=items[Math.floor(Math.random()*items.length)]; return playSound(item,`group:${name}`,`${name}（${item.name}）`,items.some(entry => entry.overlay)); }); });
+  sounds.filter(sound => !sound.group && sound.scheduleEnabled && sound.scheduleTime === hhmm).forEach(sound => runScheduled(sound.id,day,hhmm,() => playScheduledSound(sound)));
+  groups.forEach((items,name) => { const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; runScheduled(`group:${name}`,day,hhmm,() => { const item=items[Math.floor(Math.random()*items.length)]; return playScheduledSound(item,`group:${name}`,`${name}（${item.name}）`,items.some(entry => entry.overlay)); }); });
 }
 
 function runScheduled(key,day,time,action) {
@@ -322,6 +373,8 @@ function runScheduled(key,day,time,action) {
 
 updateClockAndSchedules();
 setInterval(updateClockAndSchedules,500);
+$('#enableTimerAudio').addEventListener('click',unlockTimerAudio);
+document.addEventListener('pointerdown',event => { if (event.target.closest('.play-pad')) unlockTimerAudio(); },{capture:true});
 
 function getLetterConfig() {
   try { return JSON.parse(localStorage.getItem(LETTER_CONFIG_KEY)) || {}; }
