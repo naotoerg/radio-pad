@@ -217,8 +217,9 @@ async function addFiles(files, group = '') {
 function isAudioFile(file) { return file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|oga|flac|aif|aiff|caf|opus)$/i.test(file.name); }
 
 function fillScheduleSettings(source) { $('#editScheduleEnabled').checked=Boolean(source.scheduleEnabled); $('#editScheduleTime').value=source.scheduleTime || '12:00'; }
-function editSound(sound) { $('#editId').value=sound.id; $('#editName').value=sound.name; $('#editOverlay').checked=Boolean(sound.overlay); fillScheduleSettings(sound); ui.dialog.showModal(); }
-function editGroup(name, items) { $('#editId').value=`group:${name}`; $('#editName').value=name; $('#editOverlay').checked=items.some(item => item.overlay); fillScheduleSettings(items.find(item => item.scheduleEnabled) || items[0]); ui.dialog.showModal(); }
+function openEditDialog() { ui.dialog.showModal(); $('#editName').focus({preventScroll:true}); }
+function editSound(sound) { $('#editId').value=sound.id; $('#editName').value=sound.name; $('#editOverlay').checked=Boolean(sound.overlay); fillScheduleSettings(sound); openEditDialog(); }
+function editGroup(name, items) { $('#editId').value=`group:${name}`; $('#editName').value=name; $('#editOverlay').checked=items.some(item => item.overlay); fillScheduleSettings(items.find(item => item.scheduleEnabled) || items[0]); openEditDialog(); }
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
 
 $('#openAddDialog').addEventListener('click', () => ui.addDialog.showModal());
@@ -230,6 +231,7 @@ ui.folderInput.addEventListener('change', () => {
   ui.addDialog.close();
   $('#groupNameInput').value=`ランダム ${new Set(sounds.filter(sound => sound.group).map(sound => sound.group)).size+1}`;
   $('#groupNameDialog').showModal();
+  $('#groupNameInput').focus({preventScroll:true});
 });
 $('#groupNameForm').addEventListener('submit', event => { event.preventDefault(); const name=$('#groupNameInput').value.trim(); if (!name) return; $('#groupNameDialog').close(); addFiles(pendingRandomFiles,name); pendingRandomFiles=[]; });
 $('[data-cancel-group]').addEventListener('click', () => { pendingRandomFiles=[]; ui.folderInput.value=''; $('#groupNameDialog').close(); });
