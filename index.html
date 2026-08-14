@@ -10,7 +10,7 @@
   <title>Radio Pad</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
   <header class="topbar">
@@ -57,7 +57,7 @@
 
   <dialog id="groupNameDialog">
     <form id="groupNameForm" method="dialog">
-      <div><p class="eyebrow">RANDOM SET</p><h2>セット名を入力</h2></div>
+      <div><p class="eyebrow">RANDOM SET</p><h2 tabindex="-1">セット名を入力</h2></div>
       <label>表示名<input id="groupNameInput" type="text" required maxlength="30" placeholder="例：ジングル" autocomplete="off" enterkeyhint="done"></label>
       <p class="hint">選択した音源から、押すたびに1つをランダム再生します。</p>
       <div class="dialog-actions simple-actions">
@@ -70,7 +70,7 @@
 
   <dialog id="editDialog">
     <form id="editForm" method="dialog">
-      <h2>パッドの設定</h2>
+      <h2 tabindex="-1">パッドの設定</h2>
       <input id="editId" type="hidden">
       <label>表示名<input id="editName" type="text" required maxlength="30" autocomplete="off" enterkeyhint="done"></label>
       <label class="toggle-row">
@@ -110,6 +110,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>
