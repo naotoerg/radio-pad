@@ -10,7 +10,7 @@
   <title>Radio Pad</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
   <header class="topbar">
@@ -45,14 +45,27 @@
       <label class="add-choice">
         <span class="choice-icon">▶</span>
         <span><strong>通常のパッド</strong><small>選んだ音を1つずつパッドに追加</small></span>
-        <input id="fileInput" type="file" accept="audio/*" multiple hidden>
+        <input id="fileInput" type="file" multiple hidden>
       </label>
       <label class="add-choice random-choice">
         <span class="choice-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></span>
-        <span><strong>ランダム再生フォルダ</strong><small>フォルダ内の音を1つのランダムグループにする</small></span>
-        <input id="folderInput" type="file" accept="audio/*" webkitdirectory multiple hidden>
+        <span><strong>ランダム再生セット</strong><small>複数の音を選び、セット名を付けてまとめます</small></span>
+        <input id="folderInput" type="file" multiple hidden>
       </label>
     </div>
+  </dialog>
+
+  <dialog id="groupNameDialog">
+    <form id="groupNameForm" method="dialog">
+      <div><p class="eyebrow">RANDOM SET</p><h2>セット名を入力</h2></div>
+      <label>表示名<input id="groupNameInput" type="text" required maxlength="30" placeholder="例：ジングル"></label>
+      <p class="hint">選択した音源から、押すたびに1つをランダム再生します。</p>
+      <div class="dialog-actions simple-actions">
+        <span></span>
+        <button value="cancel" type="button" data-cancel-group>キャンセル</button>
+        <button class="primary" value="default">追加</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="editDialog">
@@ -97,6 +110,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

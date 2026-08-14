@@ -2,6 +2,7 @@ const DB_NAME = 'radio-pad-db';
 const STORE = 'sounds';
 let sounds = [];
 const playing = new Map();
+let pendingRandomFiles = [];
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
 
@@ -182,12 +183,14 @@ function refreshPlayingUI() {
 
 async function addFiles(files, group = '') {
   for (const file of files) {
-    if (!file.type.startsWith('audio/')) continue;
+    if (!isAudioFile(file)) continue;
     const sound = { id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, ''), group, overlay: false, blob: file, createdAt: Date.now() };
     await saveSound(sound); sounds.push(sound);
   }
   ui.input.value = ''; ui.folderInput.value = ''; ui.addDialog.close(); render();
 }
+
+function isAudioFile(file) { return file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|oga|flac|aif|aiff|caf|opus)$/i.test(file.name); }
 
 function fillScheduleSettings(source) { $('#editScheduleEnabled').checked=Boolean(source.scheduleEnabled); $('#editScheduleTime').value=source.scheduleTime || '12:00'; }
 function editSound(sound) { $('#editId').value=sound.id; $('#editName').value=sound.name; $('#editOverlay').checked=Boolean(sound.overlay); fillScheduleSettings(sound); ui.dialog.showModal(); }
@@ -198,10 +201,14 @@ $('#openAddDialog').addEventListener('click', () => ui.addDialog.showModal());
 $('[data-close-add]').addEventListener('click', () => ui.addDialog.close());
 ui.input.addEventListener('change', () => addFiles([...ui.input.files]));
 ui.folderInput.addEventListener('change', () => {
-  const files = [...ui.folderInput.files];
-  const rootFolder = files[0]?.webkitRelativePath?.split('/')[0] || 'ランダム';
-  addFiles(files, rootFolder);
+  pendingRandomFiles=[...ui.folderInput.files].filter(isAudioFile);
+  if (!pendingRandomFiles.length) { ui.folderInput.value=''; return; }
+  ui.addDialog.close();
+  $('#groupNameInput').value=`ランダム ${new Set(sounds.filter(sound => sound.group).map(sound => sound.group)).size+1}`;
+  $('#groupNameDialog').showModal();
 });
+$('#groupNameForm').addEventListener('submit', event => { event.preventDefault(); const name=$('#groupNameInput').value.trim(); if (!name) return; $('#groupNameDialog').close(); addFiles(pendingRandomFiles,name); pendingRandomFiles=[]; });
+$('[data-cancel-group]').addEventListener('click', () => { pendingRandomFiles=[]; ui.folderInput.value=''; $('#groupNameDialog').close(); });
 ui.stop.addEventListener('click', stopAll);
 $('[data-close]').addEventListener('click', () => ui.dialog.close());
 $('#editForm').addEventListener('submit', async event => {
