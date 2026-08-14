@@ -17,7 +17,7 @@ function doGet(e) {
     if (values.length < 2) return jsonResponse({ ok: true, letters: [] }, callback);
 
     const headers = values[0].map(function(value) { return String(value).trim(); });
-    const timestampIndex = headers.indexOf('タイムスタンプ');
+    const timestampIndex = Math.max(headers.indexOf('タイムスタンプ'), headers.indexOf('Timestamp'), 0);
     const nameIndex = headers.indexOf('ラジオネーム');
     const messageIndex = headers.indexOf('DJへの質問など');
     if (nameIndex < 0 || messageIndex < 0) return jsonResponse({ ok: false, error: 'columns_not_found' }, callback);

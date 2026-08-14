@@ -404,6 +404,11 @@ function formatLetterTime(value) {
   return new Intl.DateTimeFormat('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(date);
 }
 
+function letterSortValue(letter) {
+  const timestamp=new Date(letter.timestamp).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number(letter.id) || 0;
+}
+
 function updateUnreadBadge() {
   const read=getReadLetterIds();
   const unread=letters.filter(letter => !read.has(String(letter.id))).length;
@@ -428,7 +433,7 @@ function renderLetters() {
     const footer=document.createElement('div'); footer.className='letter-footer';
     const toggle=document.createElement('button'); toggle.className='read-toggle'; toggle.type='button'; toggle.textContent=read.has(id) ? '未読に戻す' : '既読にする';
     toggle.addEventListener('click',() => toggleLetterRead(id));
-    meta.append(author,time); footer.append(toggle); card.append(meta,message,footer); list.append(card);
+    meta.append(time,author); footer.append(toggle); card.append(meta,message,footer); list.append(card);
   });
   updateUnreadBadge();
 }
@@ -460,13 +465,13 @@ async function loadLetters() {
   const status=$('#lettersStatus');
   if (!config.endpoint || !config.token) { status.hidden=false; status.classList.remove('error'); return; }
   lettersLoading=true;
-  status.hidden=false; status.classList.remove('error'); status.replaceChildren();
-  const loading=document.createElement('strong'); loading.textContent='お便りを読み込んでいます…'; status.append(loading);
+  status.hidden=true; status.classList.remove('error');
+  $('#lettersLoadingIndicator').hidden=false;
   $('#refreshLetters').disabled=true;
   try {
     const data=await fetchLettersJsonp(config.endpoint,config.token);
     if (!data.ok) throw new Error(data.error || 'アクセスできませんでした');
-    letters=(data.letters || []).sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
+    letters=(data.letters || []).sort((a,b) => letterSortValue(b)-letterSortValue(a) || Number(b.id)-Number(a.id));
     renderLetters(); status.hidden=letters.length > 0;
     if (!letters.length) { status.replaceChildren(); const empty=document.createElement('strong'); empty.textContent='お便りはまだありません'; status.append(empty); }
   } catch (error) {
@@ -474,7 +479,7 @@ async function loadLetters() {
     const title=document.createElement('strong'); title.textContent='お便りを読み込めませんでした';
     const detail=document.createElement('span'); detail.textContent='接続設定のURLとアクセスキーを確認してください。';
     status.append(title,detail); console.error('Letter fetch failed',error);
-  } finally { lettersLoading=false; $('#refreshLetters').disabled=false; }
+  } finally { lettersLoading=false; $('#lettersLoadingIndicator').hidden=true; $('#refreshLetters').disabled=false; }
 }
 
 document.querySelectorAll('.view-tab').forEach(button => button.addEventListener('click',() => switchView(button.dataset.view)));
@@ -494,7 +499,7 @@ if (getLetterConfig().endpoint && getLetterConfig().token) loadLetters();
 setInterval(() => {
   const config=getLetterConfig();
   if (config.endpoint && config.token && document.visibilityState === 'visible') loadLetters();
-},30000);
+},60000);
 document.addEventListener('visibilitychange',() => {
   const config=getLetterConfig();
   if (document.visibilityState === 'visible' && config.endpoint && config.token) loadLetters();
