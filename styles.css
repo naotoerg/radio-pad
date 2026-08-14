@@ -4,6 +4,7 @@ body { margin:0; min-height:100vh; background:#0b0d11; }
 .audio-engine { position:fixed; width:1px; height:1px; opacity:.001; pointer-events:none; }
 button,.add-button,.add-choice { font:inherit; touch-action:manipulation; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
 input,textarea { touch-action:auto; -webkit-user-select:text; user-select:text; }
+.name-input-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }.name-input-row button { min-height:48px; padding:0 13px; border:1px solid #555c68; border-radius:10px; color:#f1f2f3; background:#2a2f38; font-size:13px; font-weight:750; white-space:nowrap; }
 button:focus,button:focus-visible,.add-choice:focus-within { outline:none; }
 dialog h2:focus { outline:none; }
 .topbar { position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; padding:max(18px,env(safe-area-inset-top)) max(22px,env(safe-area-inset-right)) 16px max(22px,env(safe-area-inset-left)); background:#0b0d11; border-bottom:1px solid #282b31; }

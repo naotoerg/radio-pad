@@ -10,7 +10,7 @@
   <title>Radio Pad</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=30">
+  <link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
   <header class="topbar">
@@ -58,7 +58,7 @@
   <dialog id="groupNameDialog">
     <form id="groupNameForm" method="dialog">
       <div><p class="eyebrow">RANDOM SET</p><h2 tabindex="-1">セット名を入力</h2></div>
-      <label>表示名<input id="groupNameInput" type="text" required maxlength="30" placeholder="例：ジングル" autocomplete="off" enterkeyhint="done"></label>
+      <label>表示名<span class="name-input-row"><input id="groupNameInput" type="text" required maxlength="30" placeholder="例：ジングル" autocomplete="off" enterkeyhint="done"><button type="button" data-native-name="groupNameInput">名前を入力</button></span></label>
       <p class="hint">選択した音源から、押すたびに1つをランダム再生します。</p>
       <div class="dialog-actions simple-actions">
         <span></span>
@@ -72,7 +72,7 @@
     <form id="editForm" method="dialog">
       <h2 tabindex="-1">パッドの設定</h2>
       <input id="editId" type="hidden">
-      <label>表示名<input id="editName" type="text" required maxlength="30" autocomplete="off" enterkeyhint="done"></label>
+      <label>表示名<span class="name-input-row"><input id="editName" type="text" required maxlength="30" autocomplete="off" enterkeyhint="done"><button type="button" data-native-name="editName">名前を入力</button></span></label>
       <label class="toggle-row">
         <span><strong>ほかの音に重ねて再生</strong><small>オンの場合、再生中の音を止めずに追加します</small></span>
         <input id="editOverlay" type="checkbox" role="switch">
@@ -110,6 +110,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=32"></script>
 </body>
 </html>

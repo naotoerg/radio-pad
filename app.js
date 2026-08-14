@@ -237,6 +237,13 @@ $('#groupNameForm').addEventListener('submit', event => { event.preventDefault()
 $('[data-cancel-group]').addEventListener('click', () => { pendingRandomFiles=[]; ui.folderInput.value=''; $('#groupNameDialog').close(); });
 ui.stop.addEventListener('click', stopAll);
 $('[data-close]').addEventListener('click', () => ui.dialog.close());
+document.querySelectorAll('[data-native-name]').forEach(button => button.addEventListener('click', () => {
+  const input=document.getElementById(button.dataset.nativeName);
+  let value=null;
+  try { value=window.prompt('表示名を入力してください',input.value); }
+  catch { input.focus(); return; }
+  if (value !== null && value.trim()) input.value=value.trim().slice(0,30);
+}));
 $('#editForm').addEventListener('submit', async event => {
   event.preventDefault(); const id=$('#editId').value; const name=$('#editName').value.trim(); const overlay=$('#editOverlay').checked; const scheduleEnabled=$('#editScheduleEnabled').checked; const scheduleTime=$('#editScheduleTime').value || '12:00';
   if (id.startsWith('group:')) {
