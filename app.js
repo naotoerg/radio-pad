@@ -20,6 +20,7 @@ let timerAudioContext = null;
 let pendingRandomFiles = [];
 let bankSwipeStart = null;
 let suppressPadClickUntil = 0;
+let bankTransitioning = false;
 let activeBank=['1','2','3'].includes(localStorage.getItem(ACTIVE_BANK_KEY)) ? localStorage.getItem(ACTIVE_BANK_KEY) : '1';
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
@@ -53,7 +54,23 @@ function switchBank(bank) {
 
 function switchBankByOffset(offset) {
   const next=Math.min(3,Math.max(1,Number(activeBank)+offset));
-  if (String(next) !== activeBank) switchBank(next);
+  if (String(next) !== activeBank) animateBankSwitch(next);
+}
+
+function animateBankSwitch(bank) {
+  const next=String(bank); if (next === activeBank || bankTransitioning) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { switchBank(next); return; }
+  bankTransitioning=true;
+  const forward=Number(next) > Number(activeBank);
+  const exitClass=forward ? 'bank-exit-left' : 'bank-exit-right';
+  const enterClass=forward ? 'bank-enter-right' : 'bank-enter-left';
+  ui.grid.classList.add(exitClass);
+  setTimeout(() => {
+    ui.grid.classList.remove(exitClass);
+    switchBank(next);
+    ui.grid.classList.add(enterClass);
+    setTimeout(() => { ui.grid.classList.remove(enterClass); bankTransitioning=false; },190);
+  },130);
 }
 
 function openDb() {
@@ -370,7 +387,7 @@ function parseGroupEditId(id) { const parts=id.split(':'); return {bank:parts[1]
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
 
 updateBankUI();
-document.querySelectorAll('#bankSwitcher [data-bank]').forEach(button => button.addEventListener('click',() => switchBank(button.dataset.bank)));
+document.querySelectorAll('#bankSwitcher [data-bank]').forEach(button => button.addEventListener('click',() => animateBankSwitch(button.dataset.bank)));
 $('#samplerView').addEventListener('touchstart',event => {
   if (event.touches.length !== 1 || event.target.closest('.bank-switcher,.bank-settings-button')) { bankSwipeStart=null; return; }
   const touch=event.touches[0]; bankSwipeStart={x:touch.clientX,y:touch.clientY,time:Date.now()};
