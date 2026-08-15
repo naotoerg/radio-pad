@@ -10,7 +10,7 @@
   <title>Radio Pad</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=47">
+  <link rel="stylesheet" href="styles.css?v=69">
 </head>
 <body>
   <header class="topbar">
@@ -18,63 +18,87 @@
       <button class="view-tab active" type="button" data-view="sampler" aria-selected="true">サンプラー</button>
       <button class="view-tab" type="button" data-view="letters" aria-selected="false">お便り <span id="unreadBadge" class="unread-badge" hidden></span></button>
     </nav>
-    <time id="currentClock" class="current-clock">--:--:--</time>
+    <div class="header-clock">
+      <time id="currentClock" class="current-clock">--:--:--</time>
+      <span id="ignitionCountdown" class="ignition-countdown">点火まで --分</span>
+    </div>
     <div class="header-actions">
       <button id="openAddDialog" class="add-button" type="button" aria-label="音を追加" title="音を追加">＋</button>
-      <button id="openLetterDisplaySettings" class="letter-settings-button" type="button" aria-label="お便りの文字サイズ" title="お便りの文字サイズ" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path></svg></button>
-      <button id="stopAll" class="stop-button" type="button" disabled>■ すべて停止</button>
+      <div class="stop-stack">
+        <div class="header-now-playing" aria-live="polite"><span id="statusDot" class="status-dot"></span><div><small>NOW PLAYING</small><strong id="nowPlaying">待機中</strong></div></div>
+        <button id="stopAll" class="stop-button" type="button" disabled>■ すべて停止</button>
+      </div>
     </div>
   </header>
 
   <main>
     <section id="samplerView" class="app-view">
-      <section class="now-playing" aria-live="polite">
-        <span id="statusDot" class="status-dot"></span>
-        <div>
-          <small>NOW PLAYING</small>
-          <strong id="nowPlaying">待機中</strong>
-        </div>
-        <button id="enableTimerAudio" class="enable-audio-button" type="button">音声を準備</button>
+      <section class="bank-bar">
+        <nav id="bankSwitcher" class="bank-switcher" aria-label="サウンドバンク">
+          <button type="button" data-bank="1" class="active">バンク1</button>
+          <button type="button" data-bank="2">バンク2</button>
+          <button type="button" data-bank="3">バンク3</button>
+        </nav>
+        <button id="openBankSettings" class="bank-settings-button" type="button" aria-label="サンプラー設定"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path></svg></button>
       </section>
 
       <div id="soundGrid" class="sound-grid" aria-label="登録した音源"></div>
     </section>
 
     <section id="lettersView" class="app-view letters-view" hidden>
-      <div class="letters-toolbar">
-        <div class="letters-title-line"><h2>リスナーからのお便り</h2><p id="lettersSummary">Googleフォームと接続してください</p></div>
-        <div class="letters-actions">
-          <span id="lettersLoadingIndicator" class="letters-loading" hidden>読み込んでいます…</span>
-          <button id="refreshLetters" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"></path></svg>更新</button>
-          <button id="openLetterConfig" type="button" aria-label="お便りの接続設定">接続設定</button>
+      <section class="bank-bar letters-settings-bar">
+        <div class="letters-toolbar">
+          <div class="letters-title-line"><h2>リスナーからのお便り</h2><p id="lettersSummary">Googleフォームと接続してください</p></div>
+          <div class="letters-actions">
+            <button id="playLetterAlert" type="button" aria-label="お便りの通知音を再生"><svg class="alert-play-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="alert-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>通知音</button>
+            <button id="refreshLetters" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"></path></svg>更新</button>
+          </div>
         </div>
-      </div>
+        <button id="openLetterDisplaySettings" class="letter-settings-button" type="button" aria-label="お便りの表示設定" title="お便りの表示設定" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path></svg></button>
+      </section>
       <div id="lettersStatus" class="letters-status">
         <strong>回答シートはまだ接続されていません</strong>
-        <span>「接続設定」にApps ScriptのURLとアクセスキーを入力すると、ここでお便りを確認できます。</span>
+        <span>歯車の「表示設定」でApps ScriptのURLとアクセスキーを入力すると、ここでお便りを確認できます。</span>
       </div>
       <div id="lettersList" class="letters-list" aria-live="polite"></div>
     </section>
   </main>
 
-  <dialog id="letterDisplayDialog">
-    <form method="dialog">
-      <div><p class="eyebrow">DISPLAY</p><h2>お便りの文字サイズ</h2></div>
-      <label class="scale-setting"><span>サイズ <output id="letterScaleOutput">100%</output></span><input id="letterScaleInput" type="range" min="0.75" max="2" step="0.05" value="1"></label>
-      <div class="dialog-actions simple-actions"><button id="resetLetterScale" type="button">標準に戻す</button><span></span><button class="primary" value="default">完了</button></div>
+  <dialog id="bankSettingsDialog">
+    <form id="bankSettingsForm" method="dialog">
+      <div class="dialog-title-row"><div><p class="eyebrow">BANKS</p><h2>バンク名の設定</h2></div><button class="dialog-text-close" type="button" data-close-bank-settings>閉じる</button></div>
+      <label>バンク1<input id="bankName1" type="text" maxlength="16" required></label>
+      <label>バンク2<input id="bankName2" type="text" maxlength="16" required></label>
+      <label>バンク3<input id="bankName3" type="text" maxlength="16" required></label>
+      <div class="bank-audio-setting"><div><strong>タイマー音声</strong><small>iPadでタイマーとお便り通知音を鳴らせる状態にします</small></div><button id="enableTimerAudio" class="enable-audio-button" type="button">音声を準備</button></div>
+      <div class="dialog-actions simple-actions"><span></span><button type="button" data-close-bank-settings>キャンセル</button><button class="primary" value="default">保存</button></div>
     </form>
   </dialog>
 
-  <dialog id="letterConfigDialog">
-    <form id="letterConfigForm">
-      <div><p class="eyebrow">LETTERS</p><h2>Googleフォームと接続</h2></div>
-      <label>Apps ScriptのURL<input id="letterEndpoint" type="url" required inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
-      <label>アクセスキー<input id="letterToken" type="password" required autocomplete="off"></label>
-      <p class="hint">URLとキーはこの端末内だけに保存され、GitHubには送信されません。</p>
-      <div class="dialog-actions simple-actions">
-        <span></span>
-        <button type="button" data-close-letter-config>キャンセル</button>
-        <button class="primary" value="default">保存して接続</button>
+  <dialog id="letterDisplayDialog">
+    <form method="dialog">
+      <div class="dialog-title-row"><div><p class="eyebrow">DISPLAY</p><h2>お便りの表示設定</h2></div><button class="dialog-text-close" type="button" data-close-letter-settings>閉じる</button></div>
+      <label class="scale-setting"><span>サイズ <output id="letterScaleOutput">100%</output></span><input id="letterScaleInput" type="range" min="0.75" max="2" step="0.05" value="1"></label>
+      <button id="resetLetterScale" class="reset-scale-button" type="button">標準に戻す</button>
+      <label class="toggle-row">
+        <span><strong>新しいお便りを上に積む</strong><small>オフにすると、新しいお便りを一番下へ追加します</small></span>
+        <input id="letterSortNewestFirst" type="checkbox" role="switch" checked>
+      </label>
+      <div class="letter-alert-setting">
+        <label class="toggle-row">
+          <span><strong>新着時に音を鳴らす</strong><small>新しいお便りを検出したとき、選んだパッドを1回再生します</small></span>
+          <input id="letterAlertEnabled" type="checkbox" role="switch">
+        </label>
+        <label class="letter-alert-pad">再生するパッド<select id="letterAlertPad"></select></label>
+        <button id="testLetterAlert" class="test-letter-alert" type="button">通知音をテスト</button>
+        <p class="hint">iPadでは、先にサンプラー画面で「音声を準備」を押してください。</p>
+      </div>
+      <div class="letter-connection-setting">
+        <h3>Googleフォーム接続</h3>
+        <label>Apps ScriptのURL<input id="letterEndpoint" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+        <label>アクセスキー<input id="letterToken" type="password" autocomplete="off"></label>
+        <button id="saveLetterConnection" type="button">接続を保存</button>
+        <p class="hint">URLとキーはこの端末内だけに保存され、GitHubには送信されません。</p>
       </div>
     </form>
   </dialog>
@@ -116,6 +140,7 @@
       <h2 tabindex="-1">パッドの設定</h2>
       <input id="editId" type="hidden">
       <label>表示名<span class="name-input-row"><input id="editName" type="text" required maxlength="30" autocomplete="off" enterkeyhint="done"><button type="button" data-native-name="editName">名前を入力</button></span></label>
+      <label>バンク<select id="editBank"><option value="1">バンク1</option><option value="2">バンク2</option><option value="3">バンク3</option></select></label>
       <label class="toggle-row">
         <span><strong>ほかの音に重ねて再生</strong><small>オンの場合、再生中の音を止めずに追加します</small></span>
         <input id="editOverlay" type="checkbox" role="switch">
@@ -153,6 +178,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=69"></script>
 </body>
 </html>
