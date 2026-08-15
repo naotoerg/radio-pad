@@ -7,6 +7,8 @@ const LETTER_SORT_KEY = 'radio-pad-letter-newest-first';
 const LETTER_ALERT_KEY = 'radio-pad-letter-alert';
 const BANK_NAMES_KEY = 'radio-pad-bank-names';
 const ACTIVE_BANK_KEY = 'radio-pad-active-bank';
+const MAX_SIMULTANEOUS_AUDIO = 6;
+const MAX_CACHED_AUDIO_ENGINES = 10;
 let sounds = [];
 let letters = [];
 let lettersLoading = false;
@@ -200,13 +202,21 @@ async function updateRandomPadWaveform(padKey,sound) {
 
 function ensureAudioEngine(sound) {
   const existing=audioEngines.get(sound.id);
-  if (existing) return existing;
+  if (existing) { existing.lastUsedAt=Date.now(); return existing; }
+  pruneAudioEngines();
   const playableBlob=normalizeAudioBlob(sound.blob,sound.originalName || sound.name);
   const url=URL.createObjectURL(playableBlob);
   const audio=document.createElement('audio');
   audio.className='audio-engine'; audio.src=url; audio.preload='none'; audio.playsInline=true; audio.muted=false; audio.volume=1;
   document.body.append(audio);
-  const engine={audio,url}; audioEngines.set(sound.id,engine); return engine;
+  const engine={audio,url,lastUsedAt:Date.now()}; audioEngines.set(sound.id,engine); return engine;
+}
+
+function pruneAudioEngines() {
+  if (audioEngines.size < MAX_CACHED_AUDIO_ENGINES) return;
+  const activeSoundIds=new Set([...playing.values()].map(entry => entry.soundId));
+  const idle=[...audioEngines.entries()].filter(([id]) => !activeSoundIds.has(id)).sort((a,b) => a[1].lastUsedAt-b[1].lastUsedAt);
+  while (audioEngines.size >= MAX_CACHED_AUDIO_ENGINES && idle.length) disposeAudioEngine(idle.shift()[0]);
 }
 
 function disposeAudioEngine(soundId) {
@@ -218,12 +228,24 @@ function disposeAudioEngine(soundId) {
 function syncAudioEngines() {
   const ids=new Set(sounds.map(sound => sound.id));
   [...audioEngines.keys()].filter(id => !ids.has(id)).forEach(disposeAudioEngine);
-  sounds.forEach(ensureAudioEngine);
 }
 
 function refreshIdleAudioEngines() {
   const activeSoundIds=new Set([...playing.values()].map(entry => entry.soundId));
   [...audioEngines.keys()].filter(id => !activeSoundIds.has(id)).forEach(disposeAudioEngine);
+}
+
+function limitSimultaneousPlayback() {
+  while (playing.size >= MAX_SIMULTANEOUS_AUDIO) stopPad(playing.keys().next().value);
+}
+
+function resetAudioSession() {
+  stopAll();
+  [...audioEngines.keys()].forEach(disposeAudioEngine);
+  timerBuffers.clear();
+  if (timerAudioContext) timerAudioContext.close().catch(() => {});
+  timerAudioContext=null;
+  const button=$('#enableTimerAudio'); button.classList.remove('ready'); button.textContent='音声を準備';
 }
 
 async function unlockTimerAudio() {
@@ -260,6 +282,7 @@ async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,o
   catch (error) { console.error('Scheduled audio decode failed',error); return false; }
   if (playing.has(padKey)) stopPad(padKey);
   if (!overlay) stopAll();
+  else limitSimultaneousPlayback();
   const source=timerAudioContext.createBufferSource(); source.buffer=buffer; source.loop=Boolean(options.loop); source.connect(timerAudioContext.destination);
   const startedAt=timerAudioContext.currentTime;
   const audio={duration:buffer.duration};
@@ -275,6 +298,7 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
     return Promise.resolve(false);
   }
   if (!overlay) stopAll();
+  else limitSimultaneousPlayback();
   const engine=ensureAudioEngine(sound);
   const audio=engine.audio;
   audio.pause();
@@ -292,7 +316,8 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
       disposeAudioEngine(sound.id);
       return playSound(sound,padKey,displayName,overlay,{...options,recoveryAttempted:true});
     }
-    ui.now.textContent='再生できませんでした';
+    resetAudioSession();
+    ui.now.textContent='音声を再準備しました。もう一度押してください';
     return false;
   });
   audio.addEventListener('timeupdate', progress);
