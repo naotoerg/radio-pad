@@ -208,6 +208,11 @@ function syncAudioEngines() {
   sounds.forEach(ensureAudioEngine);
 }
 
+function refreshIdleAudioEngines() {
+  const activeSoundIds=new Set([...playing.values()].map(entry => entry.soundId));
+  [...audioEngines.keys()].filter(id => !activeSoundIds.has(id)).forEach(disposeAudioEngine);
+}
+
 async function unlockTimerAudio() {
   const AudioContextClass=window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return false;
@@ -270,6 +275,10 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   const started=audio.play().then(() => true).catch(error => {
     console.error('Audio playback failed',error);
     stopPad(padKey);
+    if (!options.recoveryAttempted) {
+      disposeAudioEngine(sound.id);
+      return playSound(sound,padKey,displayName,overlay,{...options,recoveryAttempted:true});
+    }
     ui.now.textContent='再生できませんでした';
     return false;
   });
@@ -714,5 +723,8 @@ setInterval(() => {
 },60000);
 document.addEventListener('visibilitychange',() => {
   const config=getLetterConfig();
-  if (document.visibilityState === 'visible' && config.endpoint && config.token) loadLetters();
+  if (document.visibilityState === 'visible') {
+    refreshIdleAudioEngines();
+    if (config.endpoint && config.token) loadLetters();
+  }
 });
