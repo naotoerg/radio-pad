@@ -16,6 +16,8 @@ const playing = new Map();
 const audioEngines = new Map();
 const scheduledAttempts = new Map();
 const timerBuffers = new Map();
+const runtimeWaveforms = new Map();
+const lastRandomSoundIds = new Map();
 let timerAudioContext = null;
 let pendingRandomFiles = [];
 let bankSwipeStart = null;
@@ -185,6 +187,17 @@ function drawWaveform(card,peaks) {
   card.querySelector('.waveform').innerHTML=`<span class="waveform-layer waveform-base">${svg}</span><span class="waveform-layer waveform-played">${svg}</span>`;
 }
 
+async function updateRandomPadWaveform(padKey,sound) {
+  const card=document.querySelector(`.sound-card[data-id="${CSS.escape(padKey)}"]`); if (!card) return;
+  card.dataset.waveformSoundId=sound.id;
+  let waveform=sound.waveform;
+  if (!waveform) {
+    if (!runtimeWaveforms.has(sound.id)) runtimeWaveforms.set(sound.id,createWaveform(sound.blob));
+    waveform=await runtimeWaveforms.get(sound.id);
+  }
+  if (waveform && card.isConnected && card.dataset.waveformSoundId === sound.id) drawWaveform(card,waveform);
+}
+
 function ensureAudioEngine(sound) {
   const existing=audioEngines.get(sound.id);
   if (existing) return existing;
@@ -294,14 +307,22 @@ function pickRandomSound(items,previousId='') {
   return choices[Math.floor(Math.random()*choices.length)];
 }
 
+function pickTrackedRandomSound(items,padKey,previousId='') {
+  const sound=pickRandomSound(items,previousId || lastRandomSoundIds.get(padKey) || '');
+  lastRandomSoundIds.set(padKey,sound.id);
+  return sound;
+}
+
 function playRandomGroup(items,padKey,name,overlay,loop,previousId='') {
   if (playing.has(padKey)) { stopPad(padKey); return Promise.resolve(false); }
-  const sound=pickRandomSound(items,previousId);
+  const sound=pickTrackedRandomSound(items,padKey,previousId);
+  updateRandomPadWaveform(padKey,sound);
   return playSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
 }
 
 function playScheduledRandomGroup(items,padKey,name,overlay,loop,previousId='') {
-  const sound=pickRandomSound(items,previousId);
+  const sound=pickTrackedRandomSound(items,padKey,previousId);
+  updateRandomPadWaveform(padKey,sound);
   return playScheduledSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playScheduledRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
 }
 
@@ -594,7 +615,7 @@ async function playNewLetterAlert(force=false) {
   }
   if (config.pad.startsWith('group:')) {
     const group=parseGroupEditId(config.pad); const items=sounds.filter(item => item.group === group.name && soundBank(item) === group.bank); if (!items.length) return;
-    const sound=items[Math.floor(Math.random()*items.length)];
+    const sound=pickTrackedRandomSound(items,config.pad);
     await playLetterAlertSound(sound,`letter-alert:${config.pad}`);
   }
 }
