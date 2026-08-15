@@ -23,6 +23,7 @@ let suppressPadClickUntil = 0;
 let activeBank=['1','2','3'].includes(localStorage.getItem(ACTIVE_BANK_KEY)) ? localStorage.getItem(ACTIVE_BANK_KEY) : '1';
 const shuffleIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
 const clockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>';
+const repeatIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>';
 
 const $ = (selector) => document.querySelector(selector);
 const ui = { grid: $('#soundGrid'), input: $('#fileInput'), folderInput: $('#folderInput'), addDialog: $('#addDialog'), stop: $('#stopAll'), now: $('#nowPlaying'), dot: $('#statusDot'), dialog: $('#editDialog') };
@@ -86,10 +87,12 @@ function render() {
     const card = $('#soundTemplate').content.firstElementChild.cloneNode(true);
     card.dataset.id = sound.id;
     card.querySelector('.sound-name').textContent = sound.name;
-    card.querySelector('.group-label').textContent = sound.scheduleEnabled ? `自動 ${sound.scheduleTime}` : '';
-    if (sound.scheduleEnabled) { card.classList.add('scheduled-pad'); card.querySelector('.play-icon').innerHTML=clockIcon; }
-    if (!sound.scheduleEnabled) card.querySelector('.card-footer').classList.add('settings-only');
-    card.querySelector('.play-pad').addEventListener('click', () => { if (Date.now() >= suppressPadClickUntil) playSound(sound); });
+    card.querySelector('.group-label').textContent = [sound.loop ? 'ループ' : '',sound.scheduleEnabled ? `自動 ${sound.scheduleTime}` : ''].filter(Boolean).join('・');
+    if (sound.scheduleEnabled) card.classList.add('scheduled-pad');
+    if (sound.loop) card.classList.add('loop-pad');
+    card.querySelector('.play-icon').innerHTML=sound.loop ? repeatIcon : sound.scheduleEnabled ? clockIcon : '▶';
+    if (!sound.scheduleEnabled && !sound.loop) card.querySelector('.card-footer').classList.add('settings-only');
+    card.querySelector('.play-pad').addEventListener('click', () => { if (Date.now() >= suppressPadClickUntil) playSound(sound,sound.id,sound.name,Boolean(sound.overlay),{loop:Boolean(sound.loop)}); });
     card.querySelector('.edit-button').addEventListener('click', () => editSound(sound));
     waveformJobs.push({ sound, card });
     cards.push({ title:sound.name, card });
@@ -107,15 +110,17 @@ function render() {
     card.querySelector('.play-icon').innerHTML = shuffleIcon;
     card.querySelector('.sound-name').textContent = name;
     const scheduleTime=items.find(item => item.scheduleEnabled)?.scheduleTime;
-    card.querySelector('.group-label').textContent = `ランダム・${items.length}音${scheduleTime ? `・自動 ${scheduleTime}` : ''}`;
-    if (scheduleTime) { card.classList.add('scheduled-pad'); card.querySelector('.play-icon').innerHTML=clockIcon; }
+    const loop=items.some(item => item.loop);
+    card.querySelector('.group-label').textContent = `ランダム・${items.length}音${loop ? '・ループ' : ''}${scheduleTime ? `・自動 ${scheduleTime}` : ''}`;
+    if (scheduleTime) card.classList.add('scheduled-pad');
+    if (loop) card.classList.add('loop-pad');
+    card.querySelector('.play-icon').innerHTML=loop ? repeatIcon : scheduleTime ? clockIcon : shuffleIcon;
     card.querySelector('.edit-button').hidden = true;
     card.querySelector('.edit-button').hidden = false;
     card.querySelector('.edit-button').addEventListener('click', () => editGroup(name, items, activeBank));
     card.querySelector('.play-pad').addEventListener('click', () => {
       if (Date.now() < suppressPadClickUntil) return;
-      const item = items[Math.floor(Math.random() * items.length)];
-      playSound(item, padKey, `${name}（${item.name}）`, items.some(entry => entry.overlay));
+      playRandomGroup(items,padKey,name,items.some(entry => entry.overlay),loop);
     });
     waveformJobs.push({ sound:items[0], card });
     cards.push({ title:name, card });
@@ -206,7 +211,7 @@ async function getTimerBuffer(sound) {
   return timerBuffers.get(sound.id);
 }
 
-async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,overlay=Boolean(sound.overlay)) {
+async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,overlay=Boolean(sound.overlay),options={}) {
   if (timerAudioContext && timerAudioContext.state !== 'running') {
     try { await timerAudioContext.resume(); } catch {}
   }
@@ -220,16 +225,16 @@ async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,o
   catch (error) { console.error('Scheduled audio decode failed',error); return false; }
   if (playing.has(padKey)) stopPad(padKey);
   if (!overlay) stopAll();
-  const source=timerAudioContext.createBufferSource(); source.buffer=buffer; source.connect(timerAudioContext.destination);
+  const source=timerAudioContext.createBufferSource(); source.buffer=buffer; source.loop=Boolean(options.loop); source.connect(timerAudioContext.destination);
   const startedAt=timerAudioContext.currentTime;
   const audio={duration:buffer.duration};
   Object.defineProperty(audio,'currentTime',{get:() => Math.min(buffer.duration,Math.max(0,timerAudioContext.currentTime-startedAt))});
   const progressTimer=setInterval(() => updateProgress(padKey),100);
   playing.set(padKey,{audio,source,progressTimer,soundId:sound.id,name:displayName});
-  source.onended=() => stopPad(padKey); source.start(); refreshPlayingUI(); return true;
+  source.onended=() => { stopPad(padKey); if (options.onEnded) options.onEnded(); }; source.start(); refreshPlayingUI(); return true;
 }
 
-function playSound(sound, padKey = sound.id, displayName = sound.name, overlay = Boolean(sound.overlay)) {
+function playSound(sound, padKey = sound.id, displayName = sound.name, overlay = Boolean(sound.overlay), options = {}) {
   if (playing.has(padKey)) {
     stopPad(padKey);
     return Promise.resolve(false);
@@ -238,8 +243,9 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   const engine=ensureAudioEngine(sound);
   const audio=engine.audio;
   audio.pause();
+  audio.loop=Boolean(options.loop);
   try { audio.currentTime=0; } catch {}
-  const ended=() => stopPad(padKey);
+  const ended=() => { stopPad(padKey); if (options.onEnded) options.onEnded(); };
   const failed=() => stopPad(padKey);
   const progress=() => updateProgress(padKey);
   playing.set(padKey, { audio, soundId: sound.id, name: displayName, ended, failed, progress });
@@ -255,6 +261,22 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   audio.addEventListener('ended', ended, { once:true });
   audio.addEventListener('error', failed, { once:true });
   return started;
+}
+
+function pickRandomSound(items,previousId='') {
+  const choices=items.length > 1 ? items.filter(item => item.id !== previousId) : items;
+  return choices[Math.floor(Math.random()*choices.length)];
+}
+
+function playRandomGroup(items,padKey,name,overlay,loop,previousId='') {
+  if (playing.has(padKey)) { stopPad(padKey); return Promise.resolve(false); }
+  const sound=pickRandomSound(items,previousId);
+  return playSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
+}
+
+function playScheduledRandomGroup(items,padKey,name,overlay,loop,previousId='') {
+  const sound=pickRandomSound(items,previousId);
+  return playScheduledSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playScheduledRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
 }
 
 function normalizeAudioBlob(blob,name) {
@@ -277,7 +299,7 @@ function stopPad(padKey) {
     clearInterval(entry.progressTimer);
     playing.delete(padKey); refreshPlayingUI(); return;
   }
-  entry.audio.pause(); entry.audio.currentTime = 0;
+  entry.audio.pause(); entry.audio.loop=false; entry.audio.currentTime = 0;
   entry.audio.removeEventListener('ended',entry.ended);
   entry.audio.removeEventListener('error',entry.failed);
   entry.audio.removeEventListener('timeupdate',entry.progress);
@@ -318,6 +340,7 @@ function refreshPlayingUI() {
     card.classList.toggle('playing', isPlaying);
     const icon = card.querySelector('.play-icon');
     if (isPlaying) icon.textContent = '■';
+    else if (card.classList.contains('loop-pad')) icon.innerHTML = repeatIcon;
     else if (card.classList.contains('scheduled-pad')) icon.innerHTML = clockIcon;
     else if (card.classList.contains('random-pad')) icon.innerHTML = shuffleIcon;
     else icon.textContent = '▶';
@@ -341,8 +364,8 @@ function isAudioFile(file) { return file.type.startsWith('audio/') || /\.(mp3|wa
 
 function fillScheduleSettings(source) { $('#editScheduleEnabled').checked=Boolean(source.scheduleEnabled); $('#editScheduleTime').value=source.scheduleTime || '12:00'; }
 function openEditDialog() { ui.dialog.showModal(); ui.dialog.querySelector('h2').focus({preventScroll:true}); }
-function editSound(sound) { $('#editId').value=sound.id; $('#editName').value=sound.name; $('#editBank').value=soundBank(sound); $('#editOverlay').checked=Boolean(sound.overlay); fillScheduleSettings(sound); openEditDialog(); }
-function editGroup(name, items, bank) { $('#editId').value=`group:${bank}:${name}`; $('#editName').value=name; $('#editBank').value=bank; $('#editOverlay').checked=items.some(item => item.overlay); fillScheduleSettings(items.find(item => item.scheduleEnabled) || items[0]); openEditDialog(); }
+function editSound(sound) { $('#editId').value=sound.id; $('#editName').value=sound.name; $('#editBank').value=soundBank(sound); $('#editOverlay').checked=Boolean(sound.overlay); $('#editLoop').checked=Boolean(sound.loop); fillScheduleSettings(sound); openEditDialog(); }
+function editGroup(name, items, bank) { $('#editId').value=`group:${bank}:${name}`; $('#editName').value=name; $('#editBank').value=bank; $('#editOverlay').checked=items.some(item => item.overlay); $('#editLoop').checked=items.some(item => item.loop); fillScheduleSettings(items.find(item => item.scheduleEnabled) || items[0]); openEditDialog(); }
 function parseGroupEditId(id) { const parts=id.split(':'); return {bank:parts[1],name:parts.slice(2).join(':')}; }
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
 
@@ -393,14 +416,14 @@ document.querySelectorAll('[data-native-name]').forEach(button => button.addEven
   if (value !== null && value.trim()) input.value=value.trim().slice(0,30);
 }));
 $('#editForm').addEventListener('submit', async event => {
-  event.preventDefault(); const id=$('#editId').value; const name=$('#editName').value.trim(); const bank=$('#editBank').value; const overlay=$('#editOverlay').checked; const scheduleEnabled=$('#editScheduleEnabled').checked; const scheduleTime=$('#editScheduleTime').value || '12:00';
+  event.preventDefault(); const id=$('#editId').value; const name=$('#editName').value.trim(); const bank=$('#editBank').value; const overlay=$('#editOverlay').checked; const loop=$('#editLoop').checked; const scheduleEnabled=$('#editScheduleEnabled').checked; const scheduleTime=$('#editScheduleTime').value || '12:00';
   if (id.startsWith('group:')) {
     const old=parseGroupEditId(id); const items=sounds.filter(sound => sound.group === old.name && soundBank(sound) === old.bank);
     stopPad(groupPadKey(old.bank,old.name));
-    for (const item of items) { item.group=name; item.bank=bank; item.overlay=overlay; item.scheduleEnabled=scheduleEnabled; item.scheduleTime=scheduleTime; await saveSound(item); }
+    for (const item of items) { item.group=name; item.bank=bank; item.overlay=overlay; item.loop=loop; item.scheduleEnabled=scheduleEnabled; item.scheduleTime=scheduleTime; await saveSound(item); }
   } else {
     const sound=sounds.find(item => item.id === id); if (!sound) return;
-    sound.name=name; sound.bank=bank; sound.overlay=overlay; sound.scheduleEnabled=scheduleEnabled; sound.scheduleTime=scheduleTime; await saveSound(sound);
+    sound.name=name; sound.bank=bank; sound.overlay=overlay; sound.loop=loop; sound.scheduleEnabled=scheduleEnabled; sound.scheduleTime=scheduleTime; await saveSound(sound);
   }
   ui.dialog.close(); render(); refreshPlayingUI();
 });
@@ -428,8 +451,8 @@ function updateClockAndSchedules() {
   const hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const day=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const groups=new Map(); sounds.filter(sound => sound.group).forEach(sound => { const key=`${soundBank(sound)}\u0000${sound.group}`; if (!groups.has(key)) groups.set(key,[]); groups.get(key).push(sound); });
-  sounds.filter(sound => !sound.group && sound.scheduleEnabled && sound.scheduleTime === hhmm).forEach(sound => runScheduled(sound.id,day,hhmm,() => playScheduledSound(sound)));
-  groups.forEach(items => { const name=items[0].group; const bank=soundBank(items[0]); const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; const padKey=groupPadKey(bank,name); runScheduled(padKey,day,hhmm,() => { const item=items[Math.floor(Math.random()*items.length)]; return playScheduledSound(item,padKey,`${name}（${item.name}）`,items.some(entry => entry.overlay)); }); });
+  sounds.filter(sound => !sound.group && sound.scheduleEnabled && sound.scheduleTime === hhmm).forEach(sound => runScheduled(sound.id,day,hhmm,() => playScheduledSound(sound,sound.id,sound.name,Boolean(sound.overlay))));
+  groups.forEach(items => { const name=items[0].group; const bank=soundBank(items[0]); const scheduled=items.find(item => item.scheduleEnabled && item.scheduleTime === hhmm); if (!scheduled) return; const padKey=groupPadKey(bank,name); runScheduled(padKey,day,hhmm,() => playScheduledRandomGroup(items,padKey,name,items.some(entry => entry.overlay),false)); });
 }
 
 function runScheduled(key,day,time,action) {
