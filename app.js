@@ -9,6 +9,7 @@ const BANK_NAMES_KEY = 'radio-pad-bank-names';
 const ACTIVE_BANK_KEY = 'radio-pad-active-bank';
 const MAX_SIMULTANEOUS_AUDIO = 6;
 const MAX_CACHED_AUDIO_ENGINES = 10;
+const MAX_CACHED_AUDIO_BUFFERS = 10;
 let sounds = [];
 let letters = [];
 let lettersLoading = false;
@@ -113,7 +114,7 @@ function render() {
     if (sound.loop) card.classList.add('loop-pad');
     card.querySelector('.play-icon').innerHTML=sound.loop ? repeatIcon : sound.scheduleEnabled ? clockIcon : '▶';
     if (!sound.scheduleEnabled && !sound.loop) card.querySelector('.card-footer').classList.add('settings-only');
-    card.querySelector('.play-pad').addEventListener('click', () => { if (Date.now() >= suppressPadClickUntil) playSound(sound,sound.id,sound.name,Boolean(sound.overlay),{loop:Boolean(sound.loop)}); });
+    card.querySelector('.play-pad').addEventListener('click', () => { if (Date.now() >= suppressPadClickUntil) playInteractiveSound(sound,sound.id,sound.name,Boolean(sound.overlay),{loop:Boolean(sound.loop)}); });
     card.querySelector('.edit-button').addEventListener('click', () => editSound(sound));
     waveformJobs.push({ sound, card });
     cards.push({ title:sound.name, card });
@@ -263,6 +264,9 @@ async function unlockTimerAudio() {
 
 async function getTimerBuffer(sound) {
   if (!timerBuffers.has(sound.id)) {
+    const activeSoundIds=new Set([...playing.values()].map(entry => entry.soundId));
+    const removable=[...timerBuffers.keys()].filter(id => !activeSoundIds.has(id));
+    while (timerBuffers.size >= MAX_CACHED_AUDIO_BUFFERS && removable.length) timerBuffers.delete(removable.shift());
     timerBuffers.set(sound.id,timerAudioContext.decodeAudioData(await sound.blob.arrayBuffer()).catch(error => { timerBuffers.delete(sound.id); throw error; }));
   }
   return timerBuffers.get(sound.id);
@@ -327,6 +331,12 @@ function playSound(sound, padKey = sound.id, displayName = sound.name, overlay =
   return started;
 }
 
+async function playInteractiveSound(sound,padKey=sound.id,displayName=sound.name,overlay=Boolean(sound.overlay),options={}) {
+  if (playing.has(padKey)) { stopPad(padKey); return false; }
+  if (await unlockTimerAudio()) return playScheduledSound(sound,padKey,displayName,overlay,options);
+  return playSound(sound,padKey,displayName,overlay,options);
+}
+
 function pickRandomSound(items,previousId='') {
   const choices=items.length > 1 ? items.filter(item => item.id !== previousId) : items;
   return choices[Math.floor(Math.random()*choices.length)];
@@ -342,7 +352,7 @@ function playRandomGroup(items,padKey,name,overlay,loop,previousId='') {
   if (playing.has(padKey)) { stopPad(padKey); return Promise.resolve(false); }
   const sound=pickTrackedRandomSound(items,padKey,previousId);
   updateRandomPadWaveform(padKey,sound);
-  return playSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
+  return playInteractiveSound(sound,padKey,`${name}（${sound.name}）`,overlay,{onEnded:loop ? () => playRandomGroup(items,padKey,name,overlay,true,sound.id) : null});
 }
 
 function playScheduledRandomGroup(items,padKey,name,overlay,loop,previousId='') {
