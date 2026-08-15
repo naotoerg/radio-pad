@@ -69,8 +69,8 @@ function animateBankSwitch(bank) {
     ui.grid.classList.remove(exitClass);
     switchBank(next);
     ui.grid.classList.add(enterClass);
-    setTimeout(() => { ui.grid.classList.remove(enterClass); bankTransitioning=false; },190);
-  },130);
+    setTimeout(() => { ui.grid.classList.remove(enterClass); bankTransitioning=false; },120);
+  },80);
 }
 
 function openDb() {
@@ -387,7 +387,7 @@ function parseGroupEditId(id) { const parts=id.split(':'); return {bank:parts[1]
 function escapeHtml(value) { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
 
 updateBankUI();
-document.querySelectorAll('#bankSwitcher [data-bank]').forEach(button => button.addEventListener('click',() => animateBankSwitch(button.dataset.bank)));
+document.querySelectorAll('#bankSwitcher [data-bank]').forEach(button => button.addEventListener('click',() => switchBank(button.dataset.bank)));
 $('#samplerView').addEventListener('touchstart',event => {
   if (event.touches.length !== 1 || event.target.closest('.bank-switcher,.bank-settings-button')) { bankSwipeStart=null; return; }
   const touch=event.touches[0]; bankSwipeStart={x:touch.clientX,y:touch.clientY,time:Date.now()};
