@@ -22,6 +22,7 @@ const timerBuffers = new Map();
 const runtimeWaveforms = new Map();
 const lastRandomSoundIds = new Map();
 let timerAudioContext = null;
+let lastAudioActivityAt = 0;
 let pendingRandomFiles = [];
 let bankSwipeStart = null;
 let suppressPadClickUntil = 0;
@@ -246,16 +247,23 @@ function resetAudioSession() {
   timerBuffers.clear();
   if (timerAudioContext) timerAudioContext.close().catch(() => {});
   timerAudioContext=null;
+  lastAudioActivityAt=0;
   const button=$('#enableTimerAudio'); button.classList.remove('ready'); button.textContent='音声を準備';
 }
 
 async function unlockTimerAudio() {
   const AudioContextClass=window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return false;
+  if (timerAudioContext && playing.size === 0 && lastAudioActivityAt && Date.now()-lastAudioActivityAt > 60000) {
+    timerBuffers.clear();
+    timerAudioContext.close().catch(() => {});
+    timerAudioContext=null;
+  }
   if (!timerAudioContext) timerAudioContext=new AudioContextClass();
   try { if (timerAudioContext.state !== 'running') await timerAudioContext.resume(); }
   catch { return false; }
   const ready=timerAudioContext.state === 'running';
+  if (ready) lastAudioActivityAt=Date.now();
   const button=$('#enableTimerAudio');
   button.classList.toggle('ready',ready); button.textContent=ready ? 'タイマー準備完了' : '音声を準備';
   if (ready && pendingLetterAlert) { pendingLetterAlert=false; setTimeout(playNewLetterAlert,0); }
@@ -287,12 +295,22 @@ async function playScheduledSound(sound,padKey=sound.id,displayName=sound.name,o
   if (playing.has(padKey)) stopPad(padKey);
   if (!overlay) stopAll();
   else limitSimultaneousPlayback();
-  const source=timerAudioContext.createBufferSource(); source.buffer=buffer; source.loop=Boolean(options.loop); source.connect(timerAudioContext.destination);
-  const startedAt=timerAudioContext.currentTime;
+  const playbackContext=timerAudioContext;
+  const source=playbackContext.createBufferSource(); source.buffer=buffer; source.loop=Boolean(options.loop); source.connect(playbackContext.destination);
+  const startedAt=playbackContext.currentTime;
   const audio={duration:buffer.duration};
-  Object.defineProperty(audio,'currentTime',{get:() => Math.min(buffer.duration,Math.max(0,timerAudioContext.currentTime-startedAt))});
+  Object.defineProperty(audio,'currentTime',{get:() => Math.min(buffer.duration,Math.max(0,playbackContext.currentTime-startedAt))});
   const progressTimer=setInterval(() => updateProgress(padKey),100);
-  playing.set(padKey,{audio,source,progressTimer,soundId:sound.id,name:displayName});
+  const startupWatchdog=setTimeout(() => {
+    const entry=playing.get(padKey);
+    if (entry?.source === source && playbackContext.currentTime-startedAt < .05) {
+      stopPad(padKey);
+      resetAudioSession();
+      ui.now.textContent='音声を再準備しました。もう一度押してください';
+    }
+  },800);
+  playing.set(padKey,{audio,source,progressTimer,startupWatchdog,soundId:sound.id,name:displayName});
+  lastAudioActivityAt=Date.now();
   source.onended=() => { stopPad(padKey); if (options.onEnded) options.onEnded(); }; source.start(); refreshPlayingUI(); return true;
 }
 
@@ -379,6 +397,7 @@ function stopPad(padKey) {
     entry.source.onended=null;
     try { entry.source.stop(); } catch {}
     clearInterval(entry.progressTimer);
+    clearTimeout(entry.startupWatchdog);
     playing.delete(padKey); refreshPlayingUI(); return;
   }
   entry.audio.pause(); entry.audio.loop=false; entry.audio.currentTime = 0;
